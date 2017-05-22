@@ -27,6 +27,7 @@ void capfork(char *args, size_t size) {
             write(fildes[1], &args[i], 1);
         close(fildes[1]);
         exit(1);
+
     } else if (pid > 0) {
         close(fildes[1]);
 
@@ -35,9 +36,11 @@ void capfork(char *args, size_t size) {
 
         close(fildes[0]);
         waitpid(pid, &status, 0);
+
     } else {
         perror("fork");
         exit(1);
+
     }
 }
 
@@ -48,22 +51,24 @@ void append(const char *src, size_t size, std::vector<char> &dst) {
 }
 
 void writeAll(int fd, const char *data, size_t size) {
-    size_t r = size;
+    size_t r = size, sent = 0;
     unsigned int cid = 0;
     char buff[BUFF_SIZE] = {};
+
     while (r > 0) {
         size_t fsize = r > BUFF_SIZE - sizeof(Fragment) ? BUFF_SIZE - sizeof(Fragment) : r;
         auto fragment = (Fragment *) buff;
         fragment->id = cid++;
-        memcpy(buff + sizeof(Fragment), data + size - r, fsize);
+        memcpy(buff + sizeof(Fragment), data + sent, fsize);
         if (write(fd, buff, fsize + sizeof(Fragment)) <= 0) {
+            printf("error: write");
             return;
         }
         r -= fsize;
+        sent += fsize;
     }
-    Fragment end;
-    end.id = 0;
-    write(fd, &end, sizeof(end));
+
+    write(fd, buff, 1);
 }
 
 std::vector<char> readAll(int fd) {
@@ -80,6 +85,7 @@ std::vector<char> readAll(int fd) {
         append(buff + sizeof(Fragment), (size_t) ret - sizeof(Fragment), result);
         memset(buff, 0, sizeof(buff));
     }
+
     return result;
 }
 
@@ -93,23 +99,38 @@ std::vector<char> capfork2(char *args, size_t size) {
         exit(1);
     }
 
-    if ((pid = fork()) == 0) {
+    if ((pid = fork()) > 0) {
         close(p2cFd[1]);
         close(c2pFd[0]);
+
         std::vector<char> received = readAll(p2cFd[0]);
+        close(p2cFd[0]);
+
         capitalize(&received[0]);
+
         writeAll(c2pFd[1], &received[0], received.size());
+        close(c2pFd[1]);
+
         exit(1);
-    } else if (pid > 0) {
+
+    } else if (pid == 0) {
         close(p2cFd[0]);
         close(c2pFd[1]);
+
         writeAll(p2cFd[1], args, size);
+        close(p2cFd[1]);
+
         auto ret = readAll(c2pFd[0]);
+        close(c2pFd[0]);
+
         int status;
         waitpid(pid, &status, 0);
+
         return ret;
+
     } else {
         perror("fork");
         exit(1);
+
     }
 }

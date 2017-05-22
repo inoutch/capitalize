@@ -35,9 +35,12 @@ int main() {
     } else if (type == 1) {
         cout << "convert by capfork" << endl;
         capfork(str, size);
+
     } else if (type == 2) {
+        cout << "convert by capfork (read & write)" << endl;
         auto ret = capfork2(str, size);
         memcpy(str, &ret[0], ret.size());
+
     }
 
     cout << "output \t= " + string(str) << endl;
